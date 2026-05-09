@@ -37,6 +37,7 @@ class MetaFile:
     """Represents a .meta.json file."""
     class_name: Optional[str] = None
     ignore_unknown_instances: bool = True
+    properties: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -46,6 +47,9 @@ class MetaFile:
         
         if self.class_name is not None:
             result["className"] = self.class_name
+
+        if self.properties:
+            result["properties"] = self.properties
         
         return result
 

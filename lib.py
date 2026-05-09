@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+import re
 from typing import Dict, List, Optional, Tuple, Set
 from structures import (
     InstructionReader, CreateFileInstruction, CreateFolderInstruction,
@@ -11,6 +12,14 @@ from structures import (
 import json
 
 logger = logging.getLogger(__name__)
+
+RUN_CONTEXT_BY_VALUE = {
+    0: "Legacy",
+    1: "Server",
+    2: "Client",
+    3: "Plugin",
+}
+RUN_CONTEXT_TOKEN_RE = re.compile(r"^token:\s*(\d+)$")
 
 # Load non-tree services and respected services
 # These would be loaded from files in the Rust version
@@ -175,20 +184,25 @@ def repr_instance(
             return None
         
         source_bytes = source.encode('utf-8') if isinstance(source, str) else source
+        script_meta = create_script_meta(child)
+        script_meta_contents = meta_file_contents(script_meta) if script_meta is not None else None
         
         if not child.get_children():
+            instructions = [CreateFileInstruction(
+                filename=base / f"{child.name}{extension}.luau",
+                contents=source_bytes
+            )]
+            if script_meta_contents is not None:
+                instructions.append(CreateFileInstruction(
+                    filename=base / f"{child.name}.meta.json",
+                    contents=script_meta_contents
+                ))
             return (
-                [CreateFileInstruction(
-                    filename=base / f"{child.name}{extension}.luau",
-                    contents=source_bytes
-                )],
+                instructions,
                 base
             )
         
-        meta_contents = json.dumps(
-            MetaFile(ignore_unknown_instances=True).to_dict(),
-            indent=2
-        ).encode('utf-8')
+        meta_contents = meta_file_contents(script_meta or MetaFile(ignore_unknown_instances=True))
         
         script_children_count = sum(
             1 for child_id in child.get_children()
@@ -198,14 +212,20 @@ def repr_instance(
         folder_path = base / child.name
         
         if script_children_count == total_children_count:
+            instructions = [
+                CreateFolderInstruction(folder=folder_path),
+                CreateFileInstruction(
+                    filename=folder_path / f"init{extension}.luau",
+                    contents=source_bytes
+                )
+            ]
+            if script_meta_contents is not None:
+                instructions.append(CreateFileInstruction(
+                    filename=folder_path / "init.meta.json",
+                    contents=script_meta_contents
+                ))
             return (
-                [
-                    CreateFolderInstruction(folder=folder_path),
-                    CreateFileInstruction(
-                        filename=folder_path / f"init{extension}.luau",
-                        contents=source_bytes
-                    )
-                ],
+                instructions,
                 folder_path
             )
         
@@ -280,6 +300,48 @@ def repr_instance(
         ],
         folder_path
     )
+
+
+def create_script_meta(instance) -> Optional[MetaFile]:
+    """Create script metadata for properties Rojo cannot infer from the file."""
+    if instance.class_name != "Script":
+        return None
+
+    run_context = normalize_run_context(instance.get_property("RunContext"))
+    if run_context is None:
+        return None
+
+    return MetaFile(
+        ignore_unknown_instances=True,
+        properties={"RunContext": run_context}
+    )
+
+
+def normalize_run_context(value) -> Optional[str]:
+    """Normalize Roblox RunContext values to Rojo's implicit enum string format."""
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped in RUN_CONTEXT_BY_VALUE.values():
+            return stripped
+        token_match = RUN_CONTEXT_TOKEN_RE.match(stripped)
+        if token_match is not None:
+            return RUN_CONTEXT_BY_VALUE.get(int(token_match.group(1)))
+        if stripped.isdigit():
+            return RUN_CONTEXT_BY_VALUE.get(int(stripped))
+        return stripped
+
+    if isinstance(value, int):
+        return RUN_CONTEXT_BY_VALUE.get(value)
+
+    return str(value)
+
+
+def meta_file_contents(meta: MetaFile) -> bytes:
+    """Serialize a Rojo meta file."""
+    return json.dumps(meta.to_dict(), indent=2).encode('utf-8')
 
 
 def check_has_scripts(tree, instance, has_scripts: Dict[int, bool]) -> bool:
