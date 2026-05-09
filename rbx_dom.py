@@ -77,7 +77,7 @@ def parse_property_value(prop_elem) -> Any:
         return prop_text
     elif prop_type == "bool":
         return prop_text.lower() == "true"
-    elif prop_type in ("int", "int64"):
+    elif prop_type in ("int", "int64", "token"):
         return int(prop_text) if prop_text else 0
     elif prop_type in ("float", "double"):
         return float(prop_text) if prop_text else 0.0

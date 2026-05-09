@@ -55,8 +55,33 @@ class TestFileSystemSanitization(unittest.TestCase):
         self.filesystem.finish_instructions()
 
         project = json.loads((self.temp_dir / "output" / "default.project.json").read_text(encoding="utf-8"))
+        self.assertNotIn("emitLegacyScripts", project)
         self.assertIn(" ", project["tree"])
         self.assertEqual(project["tree"][" "]["$path"], "src/Workspace/Unnamed/Child")
+
+    def test_client_script_write_removes_stale_run_context_meta(self):
+        stale_meta = self.temp_dir / "output" / "src" / "StarterGui" / "GuiScript.meta.json"
+        stale_meta.parent.mkdir(parents=True, exist_ok=True)
+        stale_meta.write_text(
+            json.dumps(
+                {
+                    "ignoreUnknownInstances": True,
+                    "properties": {
+                        "RunContext": "Legacy",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.filesystem.read_instruction(
+            CreateFileInstruction(
+                filename=Path("StarterGui") / "GuiScript.client.luau",
+                contents=b"print('client')",
+            )
+        )
+
+        self.assertFalse(stale_meta.exists())
 
 
 if __name__ == "__main__":

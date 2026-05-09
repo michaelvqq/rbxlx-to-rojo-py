@@ -104,6 +104,7 @@ class FileSystem(InstructionReader):
             try:
                 with open(file_path, 'wb') as f:
                     f.write(instruction.contents)
+                self.remove_stale_non_server_run_context_meta(file_path)
             except Exception as e:
                 raise RuntimeError(f"Can't write to file {file_path}: {e}")
         
@@ -123,3 +124,42 @@ class FileSystem(InstructionReader):
                 json.dump(self.project.to_dict(), f, indent=2)
         except Exception as e:
             raise RuntimeError(f"Can't create default.project.json: {e}")
+
+    def remove_stale_non_server_run_context_meta(self, script_path: Path):
+        """Remove obsolete RunContext metadata next to non-server script files."""
+        script_name = script_path.name
+
+        if script_name.endswith(".server.luau"):
+            return
+
+        if script_name.endswith(".client.luau"):
+            meta_name = f"{script_name[:-len('.client.luau')]}.meta.json"
+        elif script_name.endswith(".luau"):
+            meta_name = f"{script_name[:-len('.luau')]}.meta.json"
+        else:
+            return
+
+        meta_path = script_path.with_name(meta_name)
+        if not meta_path.exists():
+            return
+
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+
+        properties = meta.get("properties")
+        if not isinstance(properties, dict) or "RunContext" not in properties:
+            return
+
+        properties.pop("RunContext")
+        if properties:
+            meta["properties"] = properties
+        else:
+            meta.pop("properties", None)
+
+        if meta == {"ignoreUnknownInstances": True}:
+            meta_path.unlink()
+            return
+
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")

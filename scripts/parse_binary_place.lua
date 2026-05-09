@@ -19,8 +19,33 @@ local script_classes = {
 	ModuleScript = true,
 }
 
+local run_context_names = {
+	[0] = "Legacy",
+	[1] = "Server",
+	[2] = "Client",
+	[3] = "Plugin",
+}
+
 local instances = {}
 local next_id = 0
+
+local function serialize_run_context(run_context)
+	local token = tonumber(run_context)
+	if token ~= nil then
+		return run_context_names[token] or token
+	end
+
+	local name_ok, name = pcall(function()
+		return run_context.Name
+	end)
+	if name_ok and name ~= nil then
+		return name
+	end
+
+	local text = tostring(run_context)
+	local text_token = tonumber(string.match(text, "^token:%s*(%d+)$"))
+	return run_context_names[text_token] or run_context_names[tonumber(text)] or text
+end
 
 local function serialize_instance(instance, parent_id)
 	next_id = next_id + 1
@@ -35,6 +60,15 @@ local function serialize_instance(instance, parent_id)
 		end)
 		if ok and source ~= nil then
 			properties.Source = source
+		end
+	end
+
+	if instance.ClassName == "Script" then
+		local run_context_ok, run_context = pcall(function()
+			return instance.RunContext
+		end)
+		if run_context_ok and run_context ~= nil then
+			properties.RunContext = serialize_run_context(run_context)
 		end
 	end
 
