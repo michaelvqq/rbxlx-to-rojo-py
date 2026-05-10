@@ -75,7 +75,7 @@ class TreeIterator:
                             if child_instance:
                                 child_path = folder_path / child_instance.name
                                 children_partitions[child_instance.name] = TreePartition(
-                                    class_name="Folder",
+                                    class_name=child_instance.class_name,
                                     children={},
                                     ignore_unknown_instances=True,
                                     path=child_path
@@ -151,8 +151,8 @@ def repr_instance(
             folder_path
         )
     
-    # Special handling for StarterCharacterScripts and StarterPlayerScripts
-    # These should be treated as Folders to avoid Rojo className conflicts
+    # The project tree owns these classes under StarterPlayer; the source path
+    # itself is still a normal folder on disk.
     if class_name in ("StarterCharacterScripts", "StarterPlayerScripts"):
         folder_path = base / child.name
         meta_contents = json.dumps(
