@@ -40,26 +40,68 @@ def pyinstaller_data_arg(source: Path, destination: str) -> str:
 
 
 def local_rbxmk_path() -> Path | None:
-    """Return a local rbxmk binary when available."""
-    executable = "rbxmk.exe" if sys.platform == "win32" else "rbxmk"
-    candidates = []
+    """Return a local rbxmk binary, downloading if necessary."""
+    rbxmk = shutil.which("rbxmk")
+    if rbxmk:
+        return Path(rbxmk)
 
-    tool_storage_root = Path.home() / ".aftman" / "tool-storage" / "Anaminus" / "rbxmk"
-    if tool_storage_root.exists():
-        versioned = sorted(tool_storage_root.glob(f"*/{executable}"))
-        if versioned:
-            candidates.append(str(versioned[-1]))
+    # Download rbxmk v0.9.1 if not found in PATH.
+    import tempfile
+    import zipfile
 
-    candidates.extend([
-        shutil.which("rbxmk"),
-        str(Path.home() / ".aftman" / "bin" / executable),
-    ])
+    platform_mapping = {
+        "darwin": "darwin-amd64",
+        "win32": "windows-amd64",
+        "linux": "linux-amd64",
+    }
+    platform_suffix = platform_mapping.get(sys.platform)
 
-    for candidate in candidates:
-        if candidate and Path(candidate).exists():
-            return Path(candidate)
+    if not platform_suffix:
+        print(f"Warning: rbxmk download not available for {sys.platform}")
+        return None
 
-    return None
+    print("Downloading rbxmk v0.9.1...")
+
+    # Cache rbxmk in the .pyinstaller directory so it persists across builds.
+    cache_dir = PYINSTALLER_CONFIG_DIR / "rbxmk-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached_binary = cache_dir / "rbxmk"
+
+    if cached_binary.exists():
+        return cached_binary
+
+    url = f"https://github.com/Anaminus/rbxmk/releases/download/v0.9.1/rbxmk-v0.9.1-{platform_suffix}.zip"
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip_path = Path(tmpdir) / "rbxmk.zip"
+
+            # Use curl to download (better SSL handling on macOS).
+            curl_result = subprocess.run(
+                ["curl", "-sS", "-L", url, "-o", str(zip_path)],
+                check=False,
+            )
+            if curl_result.returncode != 0:
+                print("Warning: curl failed to download rbxmk")
+                return None
+
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(tmpdir)
+
+            # Find and extract the rbxmk binary.
+            extracted = Path(tmpdir)
+            for candidate in extracted.rglob("rbxmk*"):
+                if candidate.is_file():
+                    # Copy to cache location.
+                    shutil.copy2(candidate, cached_binary)
+                    cached_binary.chmod(0o755)
+                    return cached_binary
+
+        print("Warning: rbxmk not found in downloaded archive")
+        return None
+    except Exception as e:
+        print(f"Warning: Failed to download rbxmk: {e}")
+        return None
 
 
 def ensure_build_environment() -> Path:
