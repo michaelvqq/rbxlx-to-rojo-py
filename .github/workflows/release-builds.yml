@@ -33,13 +33,21 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Set up Aftman
-        uses: ok-nick/setup-aftman@v0.4.2
-        with:
-          path: .
-
-      - name: Install rbxmk
-        run: aftman install --no-trust-check
+      - name: Download rbxmk
+        run: |
+          RBXMK_VERSION="0.9.1"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            RBXMK_URL="https://github.com/Anaminus/rbxmk/releases/download/v${RBXMK_VERSION}/rbxmk-v${RBXMK_VERSION}-darwin-amd64.zip"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            RBXMK_URL="https://github.com/Anaminus/rbxmk/releases/download/v${RBXMK_VERSION}/rbxmk-v${RBXMK_VERSION}-windows-amd64.zip"
+          else
+            RBXMK_URL="https://github.com/Anaminus/rbxmk/releases/download/v${RBXMK_VERSION}/rbxmk-v${RBXMK_VERSION}-linux-amd64.zip"
+          fi
+          mkdir -p ~/.local/bin
+          curl -L "$RBXMK_URL" -o /tmp/rbxmk.zip
+          unzip -o /tmp/rbxmk.zip -d ~/.local/bin
+          chmod +x ~/.local/bin/rbxmk
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build standalone bundle
         run: python scripts/build_bootstrapper.py

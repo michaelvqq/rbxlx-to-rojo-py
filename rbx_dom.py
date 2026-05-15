@@ -158,12 +158,27 @@ def from_str_default(xml_string: str) -> WeakDom:
 
 def _binary_bridge_script() -> Path:
     """Return the path to the rbxmk-based binary parser bridge."""
+    # Check PyInstaller bundle first (when running as a standalone app).
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        bundled = Path(sys._MEIPASS) / "scripts" / "parse_binary_place.lua"
+        if bundled.exists():
+            return bundled
+
+    # Fall back to development/local location.
     return Path(__file__).resolve().parent / "scripts" / "parse_binary_place.lua"
 
 
 def _bundled_rbxmk_path() -> Optional[Path]:
     """Return a bundled rbxmk binary when present."""
     executable = "rbxmk.exe" if sys.platform == "win32" else "rbxmk"
+
+    # Check PyInstaller bundle first (when running as a standalone app).
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        bundled = Path(sys._MEIPASS) / "bin" / executable
+        if bundled.exists():
+            return bundled
+
+    # Check development/local bundle location.
     bundled = Path(__file__).resolve().parent / "bin" / executable
     if bundled.exists():
         return bundled
@@ -310,15 +325,10 @@ def from_path_default_binary(file_path: Path) -> WeakDom:
     bundled_rbxmk = _bundled_rbxmk_path()
     rbxmk = str(bundled_rbxmk) if bundled_rbxmk is not None else shutil.which("rbxmk")
     if rbxmk is None:
-        aftman_path = Path.home() / ".aftman" / "bin" / "rbxmk"
-        if aftman_path.exists():
-            rbxmk = str(aftman_path)
-
-    if rbxmk is None:
         raise RuntimeError(
             "Binary Roblox file parsing requires `rbxmk`.\n"
-            "Bundle it into the standalone app or install it with "
-            "`aftman trust Anaminus/rbxmk && aftman add --global Anaminus/rbxmk`."
+            "Download it from: https://github.com/Anaminus/rbxmk/releases\n"
+            "Or bundle it into the standalone app."
         )
 
     script_path = _binary_bridge_script()

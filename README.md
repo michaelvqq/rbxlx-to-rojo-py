@@ -80,7 +80,7 @@ How to use it:
 
 The workflow uses:
 - `actions/setup-python` to provide Python
-- `ok-nick/setup-aftman` plus `aftman.toml` to install `rbxmk`
+- Direct download from https://github.com/Anaminus/rbxmk/releases to install `rbxmk`
 - `scripts/build_bootstrapper.py` to build the standalone app
 - `scripts/prepare_release_artifact.py` to normalize the uploaded zip names
 
